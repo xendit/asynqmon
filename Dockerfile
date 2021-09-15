@@ -1,5 +1,5 @@
 #
-# First stage: 
+# First stage:
 # Building a frontend.
 #
 
@@ -19,7 +19,7 @@ COPY ui .
 RUN yarn install && yarn build
 
 #
-# Second stage: 
+# Second stage:
 # Building a backend.
 #
 
@@ -45,7 +45,7 @@ ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
 RUN go build -ldflags="-s -w" -o asynqmon .
 
 #
-# Third stage: 
+# Third stage:
 # Creating and running a new scratch container with the backend binary.
 #
 
@@ -53,6 +53,8 @@ FROM scratch
 
 # Copy binary from /build to the root folder of the scratch container.
 COPY --from=backend ["/build/asynqmon", "/"]
+
+EXPOSE 8080
 
 # Command to run when starting the container.
 ENTRYPOINT ["/asynqmon"]

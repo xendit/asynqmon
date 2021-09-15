@@ -4,13 +4,12 @@ import (
 	"crypto/tls"
 	"embed"
 	"errors"
-	"flag"
 	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -20,26 +19,8 @@ import (
 )
 
 // Command-line flags
-var (
-	flagPort              int
-	flagRedisAddr         string
-	flagRedisDB           int
-	flagRedisPassword     string
-	flagRedisTLS          string
-	flagRedisURL          string
-	flagRedisInsecureTLS  bool
-	flagRedisClusterNodes string
-)
 
 func init() {
-	flag.IntVar(&flagPort, "port", 8080, "port number to use for web ui server")
-	flag.StringVar(&flagRedisAddr, "redis-addr", "127.0.0.1:6379", "address of redis server to connect to")
-	flag.IntVar(&flagRedisDB, "redis-db", 0, "redis database number")
-	flag.StringVar(&flagRedisPassword, "redis-password", "", "password to use when connecting to redis server")
-	flag.StringVar(&flagRedisTLS, "redis-tls", "", "server name for TLS validation used when connecting to redis server")
-	flag.StringVar(&flagRedisURL, "redis-url", "", "URL to redis server")
-	flag.BoolVar(&flagRedisInsecureTLS, "redis-insecure-tls", false, "disable TLS certificate host checks")
-	flag.StringVar(&flagRedisClusterNodes, "redis-cluster-nodes", "", "comma separated list of host:port addresses of cluster nodes")
 }
 
 // staticFileServer implements the http.Handler interface, so we can use it
@@ -91,79 +72,50 @@ func (srv *staticFileServer) indexFilePath() string {
 	return filepath.Join(srv.staticDirPath, srv.indexFileName)
 }
 
-func getRedisOptionsFromFlags() (*redis.UniversalOptions, error) {
-	var opts redis.UniversalOptions
-
-	if flagRedisClusterNodes != "" {
-		opts.Addrs = strings.Split(flagRedisClusterNodes, ",")
-		opts.Password = flagRedisPassword
-	} else {
-		if flagRedisURL != "" {
-			res, err := redis.ParseURL(flagRedisURL)
-			if err != nil {
-				return nil, err
-			}
-			opts.Addrs = append(opts.Addrs, res.Addr)
-			opts.DB = res.DB
-			opts.Password = res.Password
-
-		} else {
-			opts.Addrs = []string{flagRedisAddr}
-			opts.DB = flagRedisDB
-			opts.Password = flagRedisPassword
-		}
-	}
-
-	if flagRedisTLS != "" {
-		opts.TLSConfig = &tls.Config{ServerName: flagRedisTLS}
-	}
-	if flagRedisInsecureTLS {
-		if opts.TLSConfig == nil {
-			opts.TLSConfig = &tls.Config{}
-		}
-		opts.TLSConfig.InsecureSkipVerify = true
-	}
-	return &opts, nil
-}
-
 //go:embed ui/build/*
 var staticContents embed.FS
 
 func main() {
-	flag.Parse()
 
-	opts, err := getRedisOptionsFromFlags()
+	res, err := redis.ParseURL(os.Getenv("REDIS_URL"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	res.Password = os.Getenv("REDIS_PASSWORD")
+	res.TLSConfig = &tls.Config{
+		// Set InsecureSkipVerify to skip the default validation we are
+		// replacing. This will not disable VerifyPeerCertificate.
+		InsecureSkipVerify: true,
+
+		// While packages like net/http will implicitly set ServerName, the
+		// VerifyPeerCertificate callback can't access that value, so it has to be set
+		// explicitly here or in VerifyPeerCertificate on the client side. If in
+		// an http.Transport DialTLS callback, this can be obtained by passing
+		// the addr argument to net.SplitHostPort.
+		ServerName: res.TLSConfig.ServerName,
+
+		// On the server side, set ClientAuth to require client certificates (or
+		// VerifyPeerCertificate will run anyway and panic accessing certs[0])
+		// but not verify them with the default verifier.
+		ClientAuth: tls.RequireAnyClientCert,
+	}
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	useRedisCluster := flagRedisClusterNodes != ""
-
 	var redisConnOpt asynq.RedisConnOpt
-	if useRedisCluster {
-		redisConnOpt = asynq.RedisClusterClientOpt{
-			Addrs:     opts.Addrs,
-			Password:  opts.Password,
-			TLSConfig: opts.TLSConfig,
-		}
-	} else {
-		redisConnOpt = asynq.RedisClientOpt{
-			Addr:      opts.Addrs[0],
-			DB:        opts.DB,
-			Password:  opts.Password,
-			TLSConfig: opts.TLSConfig,
-		}
+
+	redisConnOpt = asynq.RedisClientOpt{
+		Addr:      res.Addr,
+		DB:        res.DB,
+		Password:  res.Password,
+		TLSConfig: res.TLSConfig,
 	}
 
 	inspector := asynq.NewInspector(redisConnOpt)
 	defer inspector.Close()
 
-	var redisClient redis.UniversalClient
-	if useRedisCluster {
-		redisClient = redis.NewClusterClient(opts.Cluster())
-	} else {
-		redisClient = redis.NewClient(opts.Simple())
-	}
+	redisClient := redis.NewClient(res)
 	defer redisClient.Close()
 
 	router := mux.NewRouter()
@@ -234,11 +186,8 @@ func main() {
 	api.HandleFunc("/scheduler_entries/{entry_id}/enqueue_events", newListSchedulerEnqueueEventsHandlerFunc(inspector)).Methods("GET")
 
 	// Redis info endpoint.
-	if useRedisCluster {
-		api.HandleFunc("/redis_info", newRedisClusterInfoHandlerFunc(redisClient.(*redis.ClusterClient), inspector)).Methods("GET")
-	} else {
-		api.HandleFunc("/redis_info", newRedisInfoHandlerFunc(redisClient.(*redis.Client))).Methods("GET")
-	}
+
+	api.HandleFunc("/redis_info", newRedisInfoHandlerFunc(redisClient)).Methods("GET")
 
 	fs := &staticFileServer{
 		contents:      staticContents,
@@ -254,11 +203,11 @@ func main() {
 
 	srv := &http.Server{
 		Handler:      handler,
-		Addr:         fmt.Sprintf(":%d", flagPort),
+		Addr:         fmt.Sprintf(":%d", 8080),
 		WriteTimeout: 10 * time.Second,
 		ReadTimeout:  10 * time.Second,
 	}
 
-	fmt.Printf("Asynq Monitoring WebUI server is listening on port %d\n", flagPort)
+	fmt.Printf("Asynq Monitoring WebUI server is listening on port %d\n", 8080)
 	log.Fatal(srv.ListenAndServe())
 }
