@@ -4,6 +4,7 @@
 #
 
 FROM alpine:3.13 AS frontend
+ARG TARGETARCH
 
 # Move to a working directory (/static).
 WORKDIR /static
@@ -24,6 +25,7 @@ RUN yarn install && yarn build
 #
 
 FROM golang:1.16-alpine AS backend
+ARG TARGETARCH
 
 # Move to a working directory (/build).
 WORKDIR /build
@@ -39,7 +41,7 @@ COPY . .
 COPY --from=frontend ["/static/build", "ui/build"]
 
 # Set necessary environmet variables needed for the image and build the server.
-ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
+ENV CGO_ENABLED=0 GOOS=linux GOARCH=${TARGET_ARCH}
 
 # Run go build (with ldflags to reduce binary size).
 RUN go build -ldflags="-s -w" -o asynqmon .
