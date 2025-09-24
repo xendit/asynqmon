@@ -55,8 +55,20 @@ RUN go build -ldflags="-s -w" -o asynqmon .
 ARG REGISTRY="420361828844.dkr.ecr.ap-southeast-1.amazonaws.com"
 FROM ${REGISTRY}/xendit/alpine-3.18:1.1.0 as base
 
+# Add nonroot user and related environment
+ENV APP_USER=app
+ENV APP_DIR="/$APP_USER"
+ENV PATH="$APP_DIR:$PATH"
+WORKDIR "/app"
+USER app
+
+# So Sentry tracking can be embeded into image on docker build stage
+ARG SENTRY_RELEASE
+ENV SENTRY_RELEASE=$SENTRY_RELEASE
+
+
 # Copy binary from /build to the root folder of the scratch container.
-COPY --from=backend ["/build/asynqmon", "/"]
+COPY --from=backend /build/asynqmon /app/
 
 EXPOSE 8080
 
