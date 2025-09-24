@@ -72,7 +72,7 @@
       value: xendit/direct-debit-service-asynqmon:$RELEASE_TAG
       type: VAR
     - key: APP_NAME
-      value: direct-debit-service-asynqmon-dev
+      value: direct-debit-service-asynqmon-development
       type: VAR
     - key: APP_TARGET
       value: cluster/xnd-sg-stg-aws-0
