@@ -30,7 +30,6 @@
     shell: BASH
     trigger_conditions:
     - trigger_condition: ALWAYS
-      timezone: ""
       trigger_hours: []
       trigger_days: []
   - action: Build Docker Image (multiarch)
@@ -47,7 +46,6 @@
     - REGISTRY=705506614808.dkr.ecr.ap-southeast-1.amazonaws.com
     trigger_conditions:
     - trigger_condition: ALWAYS
-      timezone: ""
       trigger_hours: []
       trigger_days: []
     target_platform: "linux/arm64,linux/amd64"
@@ -64,7 +62,7 @@
     - apt update && apt install -y jq unzip curl
     - curl -sL "https://github.com/google/go-containerregistry/releases/download/v0.20.5/go-containerregistry_Linux_arm64.tar.gz" > go-containerregistry.tar.gz
     - tar -zxvf go-containerregistry.tar.gz -C /usr/local/bin/ crane
-  - action: "Run xendit-argo-catalog/[ARGO-CATALOG] Add image version (argo-staging)"
+  - action: "Run xendit-argo-catalog/[ARGO-CATALOG] Add image version (argo-fawkes)"
     type: RUN_NEXT_PIPELINE
     comment: "Triggered by $BUDDY_PIPELINE_NAME execution #$BUDDY_EXECUTION_ID"
     priority: NORMAL
