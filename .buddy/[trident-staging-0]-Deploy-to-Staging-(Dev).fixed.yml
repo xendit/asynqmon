@@ -2,7 +2,7 @@
   events:
   - type: PUSH
     refs:
-    - :default
+    - (refs/tags/v\d+\.\d+\.\d+-rc\d+$)
   fetch_all_refs: true
   trigger_conditions:
   - trigger_condition: ALWAYS
