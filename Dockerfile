@@ -42,7 +42,7 @@ COPY . .
 COPY --from=frontend ["/static/build", "ui/build"]
 
 # Set necessary environmet variables needed for the image and build the server.
-ENV CGO_ENABLED=0 GOOS=linux GOARCH=${TARGET_ARCH}
+ENV CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH}
 
 # Run go build (with ldflags to reduce binary size).
 RUN go build -ldflags="-s -w" -o asynqmon .
