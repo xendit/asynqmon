@@ -15,7 +15,7 @@
     type: BUILD
     working_directory: /buddy/direct-debit-service-asynqmon
     region: ap-southeast-1
-    integration: 5f69e5f01a22366a8e6adfa7
+    integration: 5e85761fc5f225000f97dd99
     docker_image_name: xendit/alpine
     docker_image_tag: 1.0
     image_location: PRIVATE_REGISTRY
@@ -36,7 +36,7 @@
   - action: Build Docker Image (multiarch)
     type: DOCKER_BUILD_MULTI_ARCH
     region: ap-southeast-1
-    integration: 5f69e5f01a22366a8e6adfa7
+    integration: 5e85761fc5f225000f97dd99
     docker_image_tag: "${RELEASE_TAG}"
     docker_registry: AMAZON_ECR
     repository: xendit/direct-debit-service-asynqmon
@@ -44,7 +44,7 @@
     - GITHUB_TOKEN=$GITHUB_TOKEN
     - NPM_TOKEN=$NPM_TOKEN
     - DD_VERSION=$VERSION_TAG
-    - REGISTRY=705506614808.dkr.ecr.ap-southeast-1.amazonaws.com
+    - REGISTRY=420361828844.dkr.ecr.ap-southeast-1.amazonaws.com
     trigger_conditions:
     - trigger_condition: ALWAYS
       trigger_hours: []
@@ -53,10 +53,10 @@
   - action: Tag underlying docker images
     type: AWS_CLI_2
     region: ap-southeast-1
-    integration: 5f69e5f01a22366a8e6adfa7
+    integration: 5e85761fc5f225000f97dd99
     execute_commands:
     - export DOCKER_REPOSITORY="xendit/direct-debit-service-asynqmon"
-    - export DOCKER_REGISTRY="705506614808.dkr.ecr.ap-southeast-1.amazonaws.com"
+    - export DOCKER_REGISTRY="420361828844.dkr.ecr.ap-southeast-1.amazonaws.com"
     - "aws ecr get-login-password --region ap-southeast-1 | crane auth login --username AWS --password-stdin ${DOCKER_REGISTRY}"
     - "crane manifest ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${RELEASE_TAG} | jq -r '.manifests[] | \"\\(.digest) \\(.platform.architecture)\\(.platform.variant // \"\")\"' | while read d a v; do crane tag ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}@$d ${RELEASE_TAG}-${a}${v}; done"
     setup_commands:
@@ -68,5 +68,15 @@
     comment: "Triggered by $BUDDY_PIPELINE_NAME execution #$BUDDY_EXECUTION_ID"
     priority: NORMAL
     specific_revision: argo-fawkes
+    variables:
+    - key: APP_IMAGE
+      value: xendit/direct-debit-service-asynqmon:$RELEASE_TAG
+      type: VAR
+    - key: APP_NAME
+      value: direct-debit-service-asynqmon-dev
+      type: VAR
+    - key: APP_TARGET
+      value: cluster/xnd-sg-prod-aws-0
+      type: VAR
     project: xendit-argo-catalog
     pipeline: "[ARGO-CATALOG] Add image version (argo-fawkes)"
