@@ -2,7 +2,7 @@
   events:
   - type: PUSH
     refs:
-    - (refs/tags/v\d+\.\d+\.\d+-rc\d+$)
+    - :default
   fetch_all_refs: true
   trigger_conditions:
   - trigger_condition: ALWAYS
@@ -23,10 +23,10 @@
     - set -e
     - "COMMIT_DATE_ISO=\"$(git show ${BUDDY_EXECUTION_REVISION} --format=%cd --date=iso | head -n 1)\""
     - "export COMMIT_DATE=$(LC_TIME=\"C\" TZ=\"Asia/Jakarta\" date +'%y.%m.%d-%H.%M' --date=\"${COMMIT_DATE_ISO}\")"
-    - "export RELEASE_TAG=\"${BUDDY_EXECUTION_TAG}\""
+    - "export RELEASE_TAG=\"${BUDDY_RUN_COMMIT_SHORT}\""
     - export COMMIT_MESSAGE="$(git log -1 --pretty=oneline --abbrev-commit --format=\"%B\" | head -n 1)"
     - "export CHANGE_CAUSE=\"${RELEASE_TAG} - ${COMMIT_MESSAGE}\""
-    - "export VERSION_TAG=\"${BUDDY_EXECUTION_TAG}\""
+    - "export VERSION_TAG=\"${BUDDY_RUN_COMMIT_SHORT}\""
     shell: BASH
     trigger_conditions:
     - trigger_condition: ALWAYS
