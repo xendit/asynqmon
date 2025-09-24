@@ -2,8 +2,8 @@
 # First stage:
 # Building a frontend.
 #
-
-FROM alpine:3.13 AS frontend
+ARG REGISTRY="420361828844.dkr.ecr.ap-southeast-1.amazonaws.com"
+FROM ${REGISTRY}/xendit/golang-1.21:1.4.0 AS frontend
 ARG TARGETARCH
 
 # Move to a working directory (/static).
@@ -24,7 +24,8 @@ RUN yarn install && yarn build
 # Building a backend.
 #
 
-FROM golang:1.16-alpine AS backend
+ARG REGISTRY="420361828844.dkr.ecr.ap-southeast-1.amazonaws.com"
+FROM ${REGISTRY}/xendit/golang-1.21:1.4.0 AS backend
 ARG TARGETARCH
 
 # Move to a working directory (/build).
@@ -51,7 +52,8 @@ RUN go build -ldflags="-s -w" -o asynqmon .
 # Creating and running a new scratch container with the backend binary.
 #
 
-FROM scratch
+ARG REGISTRY="420361828844.dkr.ecr.ap-southeast-1.amazonaws.com"
+FROM ${REGISTRY}/xendit/alpine-3.18:1.1.0 as base
 
 # Copy binary from /build to the root folder of the scratch container.
 COPY --from=backend ["/build/asynqmon", "/"]
