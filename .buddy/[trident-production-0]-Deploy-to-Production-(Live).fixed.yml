@@ -1,0 +1,72 @@
+- pipeline: trident_production_0__deploy_to_production__live
+  name: "[trident-production-0] Deploy to Production (Live)"
+  events:
+  - type: PUSH
+    refs:
+    - (refs/tags/v\d+\.\d+\.\d+-rc\d+$)
+  fetch_all_refs: true
+  trigger_conditions:
+  - trigger_condition: ALWAYS
+  tags:
+  - ci
+  arch: ARM64
+  actions:
+  - action: Prepare Env Variables
+    type: BUILD
+    working_directory: /buddy/direct-debit-service-asynqmon
+    region: ap-southeast-1
+    integration: 5e85761fc5f225000f97dd99
+    docker_image_name: xendit/alpine
+    docker_image_tag: 1.0
+    image_location: PRIVATE_REGISTRY
+    docker_registry: AMAZON_ECR
+    execute_commands:
+    - set -e
+    - "COMMIT_DATE_ISO=\"$(git show ${BUDDY_EXECUTION_REVISION} --format=%cd --date=iso | head -n 1)\""
+    - "export COMMIT_DATE=$(LC_TIME=\"C\" TZ=\"Asia/Jakarta\" date +'%y.%m.%d-%H.%M' --date=\"${COMMIT_DATE_ISO}\")"
+    - "export RELEASE_TAG=\"${BUDDY_EXECUTION_TAG}\""
+    - export COMMIT_MESSAGE="$(git log -1 --pretty=oneline --abbrev-commit --format=\"%B\" | head -n 1)"
+    - "export CHANGE_CAUSE=\"${RELEASE_TAG} - ${COMMIT_MESSAGE}\""
+    - "export VERSION_TAG=\"${BUDDY_EXECUTION_TAG}\""
+    shell: BASH
+    trigger_conditions:
+    - trigger_condition: ALWAYS
+      trigger_hours: []
+      trigger_days: []
+  - action: Build Docker Image (multiarch)
+    type: DOCKER_BUILD_MULTI_ARCH
+    region: ap-southeast-1
+    integration: 5e85761fc5f225000f97dd99
+    docker_image_tag: "${RELEASE_TAG}"
+    docker_registry: AMAZON_ECR
+    repository: xendit/direct-debit-service-asynqmon
+    build_args:
+    - GITHUB_TOKEN=$GITHUB_TOKEN
+    - NPM_TOKEN=$NPM_TOKEN
+    - DD_VERSION=$VERSION_TAG
+    - REGISTRY=420361828844.dkr.ecr.ap-southeast-1.amazonaws.com
+    trigger_conditions:
+    - trigger_condition: ALWAYS
+      trigger_hours: []
+      trigger_days: []
+    target_platform: "linux/arm64,linux/amd64"
+  - action: Tag underlying docker images
+    type: AWS_CLI_2
+    region: ap-southeast-1
+    integration: 5e85761fc5f225000f97dd99
+    execute_commands:
+    - export DOCKER_REPOSITORY="xendit/direct-debit-service-asynqmon"
+    - export DOCKER_REGISTRY="420361828844.dkr.ecr.ap-southeast-1.amazonaws.com"
+    - "aws ecr get-login-password --region ap-southeast-1 | crane auth login --username AWS --password-stdin ${DOCKER_REGISTRY}"
+    - "crane manifest ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}:${RELEASE_TAG} | jq -r '.manifests[] | \"\\(.digest) \\(.platform.architecture)\\(.platform.variant // \"\")\"' | while read d a v; do crane tag ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY}@$d ${RELEASE_TAG}-${a}${v}; done"
+    setup_commands:
+    - apt update && apt install -y jq unzip curl
+    - curl -sL "https://github.com/google/go-containerregistry/releases/download/v0.20.5/go-containerregistry_Linux_arm64.tar.gz" > go-containerregistry.tar.gz
+    - tar -zxvf go-containerregistry.tar.gz -C /usr/local/bin/ crane
+  - action: "Run xendit-argo-catalog/[ARGO-CATALOG] Add image version (argo-fawkes)"
+    type: RUN_NEXT_PIPELINE
+    comment: "Triggered by $BUDDY_PIPELINE_NAME execution #$BUDDY_EXECUTION_ID"
+    priority: NORMAL
+    specific_revision: argo-fawkes
+    project: xendit-argo-catalog
+    pipeline: "[ARGO-CATALOG] Add image version (argo-fawkes)"
